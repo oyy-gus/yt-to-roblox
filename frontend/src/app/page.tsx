@@ -34,7 +34,7 @@ export default function Home() {
   const [activeJob, setActiveJob] = useState<JobProgressData | null>(null);
   const [customMetadata, setCustomMetadata] = useState<Record<string, TrackOverride>>({});
   const [previewTrack, setPreviewTrack] = useState<TrackItem | null>(null);
-  const [targetAction, setTargetAction] = useState<TargetAction>('download');
+  const [targetAction] = useState<TargetAction>('roblox');
   const [robloxConfig, setRobloxConfig] = useState<RobloxConfig>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -100,16 +100,6 @@ export default function Home() {
       setSelectedTrackIds(selectedTrackIds.filter(id => id !== trackId));
     } else {
       setSelectedTrackIds([...selectedTrackIds, trackId]);
-    }
-  };
-
-  const handleTargetActionChange = (action: TargetAction) => {
-    setTargetAction(action);
-    if (action === 'roblox' && analysisResult?.tracks) {
-      setSelectedTrackIds(prev => prev.filter(id => {
-        const t = analysisResult.tracks.find(x => x.id === id);
-        return !t || !t.durationSec || t.durationSec <= 420;
-      }));
     }
   };
 
@@ -261,16 +251,6 @@ export default function Home() {
     }
   };
 
-  const handleDownloadTrack = (trackId: string) => {
-    if (!activeJob) return;
-    window.open(`${getNormalizedApiUrl()}/files/${activeJob.id}/track/${trackId}`, '_blank');
-  };
-
-  const handleDownloadZip = () => {
-    if (!activeJob) return;
-    window.open(`${getNormalizedApiUrl()}/files/${activeJob.id}/zip`, '_blank');
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-[#0c0d12] text-white font-sans antialiased selection:bg-[#1ed760] selection:text-black relative">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-b from-[#1ed760]/10 via-[#10b981]/5 to-transparent blur-3xl pointer-events-none -z-10" />
@@ -281,15 +261,15 @@ export default function Home() {
         <div className="text-center space-y-3 pt-4 pb-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs text-neutral-300">
             <Sparkles className="w-3.5 h-3.5 text-[#1ed760]" />
-            <span>Pembersih Judul & Tag Musik Otomatis</span>
+            <span>Pembersih Judul & Upload Audio Roblox Otomatis</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
-            Unduh Musik Bersih & Kualitas Tinggi
+            Upload Audio YouTube ke Roblox
           </h1>
 
           <p className="text-sm sm:text-base text-neutral-400 max-w-2xl mx-auto leading-relaxed">
-            Hapus teks promosi pada judul otomatis, atur nada & pitch sinkronisasi Roblox, dengarkan pratinjau audio, dan unduh MP3 atau kirim langsung ke cloud.
+            Hapus teks promosi pada judul otomatis, atur nada & pitch sinkronisasi Roblox, dengarkan pratinjau audio, dan upload langsung ke Roblox Open Cloud.
           </p>
         </div>
 
@@ -298,8 +278,6 @@ export default function Home() {
           isLoading={isAnalyzing}
           settings={settings}
           setSettings={setSettings}
-          targetAction={targetAction}
-          setTargetAction={handleTargetActionChange}
           robloxConfig={robloxConfig}
           setRobloxConfig={setRobloxConfig}
         />
@@ -341,8 +319,6 @@ export default function Home() {
           <JobProgressCard
             job={activeJob}
             onCancelJob={handleCancelJob}
-            onDownloadTrack={handleDownloadTrack}
-            onDownloadZip={handleDownloadZip}
           />
         )}
       </main>

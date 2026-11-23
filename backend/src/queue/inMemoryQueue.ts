@@ -32,7 +32,7 @@ export class JobQueue extends EventEmitter {
       settings, 
       selectedTrackIds, 
       customMetadata,
-      targetAction = 'download',
+      targetAction = 'roblox',
       robloxConfig = null
     } = jobData;
 

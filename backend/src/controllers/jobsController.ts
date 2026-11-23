@@ -21,7 +21,7 @@ export async function createJobHandler(req: Request, res: Response, next: NextFu
       selectedTrackIds, 
       customMetadata, 
       settings: bodySettings,
-      targetAction = 'download',
+      targetAction = 'roblox',
       robloxConfig = null
     } = req.body;
 

@@ -1,7 +1,7 @@
 export type CleanerMode = 'Default' | 'Standard' | 'Advanced' | 'Custom';
 export type AudioFormat = 'mp3' | 'original';
 export type AudioQuality = 'best' | '320' | '256' | '192' | '128';
-export type TargetAction = 'download' | 'roblox';
+export type TargetAction = 'roblox';
 export type JobStatus = 'queued' | 'active' | 'completed' | 'cancelled' | 'failed';
 export type TrackStatus = 'pending' | 'cleaning' | 'processing' | 'completed' | 'failed';
 

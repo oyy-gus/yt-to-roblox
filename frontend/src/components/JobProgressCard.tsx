@@ -1,17 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Loader2, CheckCircle2, XCircle, Ban, Archive, Download, Copy, Check, ExternalLink, CloudUpload } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Ban, Copy, Check, ExternalLink, CloudUpload } from 'lucide-react';
 import type { JobProgressData } from '../types/index.js';
 
 interface JobProgressCardProps {
   job: JobProgressData | null;
   onCancelJob: () => void;
-  onDownloadTrack: (trackId: string) => void;
-  onDownloadZip: () => void;
 }
 
-export default function JobProgressCard({ job, onCancelJob, onDownloadTrack, onDownloadZip }: JobProgressCardProps) {
+export default function JobProgressCard({ job, onCancelJob }: JobProgressCardProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   if (!job) return null;
@@ -28,15 +26,14 @@ export default function JobProgressCard({ job, onCancelJob, onDownloadTrack, onD
             <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
               Proses Antrean Lagu
             </h3>
-            <span className={`music-pill ${
-              job.status === 'completed'
+            <span className={`music-pill ${job.status === 'completed'
                 ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
                 : job.status === 'active'
-                ? 'bg-[#1ed760]/15 border border-[#1ed760]/30 text-emerald-300 animate-pulse'
-                : job.status === 'cancelled'
-                ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
-                : 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
-            }`}>
+                  ? 'bg-[#1ed760]/15 border border-[#1ed760]/30 text-emerald-300 animate-pulse'
+                  : job.status === 'cancelled'
+                    ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
+                    : 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+              }`}>
               {job.status === 'completed' ? 'Selesai' : job.status === 'active' ? 'Memproses' : job.status}
             </span>
           </div>
@@ -187,15 +184,6 @@ export default function JobProgressCard({ job, onCancelJob, onDownloadTrack, onD
                   </a>
                 )}
               </div>
-            ) : track.status === 'completed' ? (
-              <button
-                type="button"
-                onClick={() => onDownloadTrack(track.id)}
-                className="btn-glass px-3.5 py-1 text-xs flex items-center gap-1.5 shrink-0 text-white font-medium"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Unduh</span>
-              </button>
             ) : null}
           </div>
         ))}
@@ -242,30 +230,6 @@ export default function JobProgressCard({ job, onCancelJob, onDownloadTrack, onD
                 <span>Salin Semua Skrip Luau</span>
               </>
             )}
-          </button>
-        </div>
-      )}
-
-      {isFinished && job.targetAction !== 'roblox' && job.hasZip && completedTracksCount > 0 && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.08] p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="space-y-1 text-center sm:text-left">
-            <span className="text-sm font-bold text-white flex items-center gap-2 justify-center sm:justify-start">
-              <Archive className="w-4 h-4 text-[#1ed760]" />
-              <span>Semua Lagu Siap Diunduh!</span>
-            </span>
-            <p className="text-xs text-neutral-300">
-              {completedTracksCount} lagu telah dikemas ke dalam satu file arsip ZIP beserta ringkasan ID3 tags.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            id="btn-download-all-zip"
-            onClick={onDownloadZip}
-            className="btn-spotify px-6 py-2.5 text-xs flex items-center gap-2 font-bold cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>Unduh Semua File (ZIP)</span>
           </button>
         </div>
       )}

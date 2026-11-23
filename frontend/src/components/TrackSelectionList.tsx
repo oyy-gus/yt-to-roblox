@@ -98,7 +98,7 @@ export default function TrackSelectionList({
   onResetAllMetadata,
   playlistTitle = '',
   settings = { format: 'mp3', quality: '320', cleanerMode: 'Advanced', pitch: 0 },
-  targetAction = 'download',
+  targetAction = 'roblox',
   onPlayPreview,
   currentPreviewId
 }: TrackSelectionListProps) {

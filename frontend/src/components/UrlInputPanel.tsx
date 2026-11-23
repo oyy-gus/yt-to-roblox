@@ -8,8 +8,6 @@ import {
   Clipboard, 
   X, 
   AlertCircle, 
-  Download,
-  CloudUpload,
   KeyRound,
   Eye,
   EyeOff,
@@ -19,15 +17,13 @@ import {
   Sparkles,
   Sliders
 } from 'lucide-react';
-import type { AudioSettings, RobloxConfig, TargetAction, AudioFormat, AudioQuality, CleanerMode } from '../types/index.js';
+import type { AudioSettings, RobloxConfig, AudioFormat, AudioQuality, CleanerMode } from '../types/index.js';
 
 interface UrlInputPanelProps {
   onAnalyze: (url: string) => void;
   isLoading: boolean;
   settings: AudioSettings;
   setSettings: (settings: AudioSettings) => void;
-  targetAction?: TargetAction;
-  setTargetAction?: (action: TargetAction) => void;
   robloxConfig?: RobloxConfig;
   setRobloxConfig?: (config: RobloxConfig) => void;
 }
@@ -37,8 +33,6 @@ export default function UrlInputPanel({
   isLoading, 
   settings, 
   setSettings,
-  targetAction = 'download',
-  setTargetAction,
   robloxConfig = { apiKey: '', creatorId: '', creatorType: 'user' },
   setRobloxConfig
 }: UrlInputPanelProps) {
@@ -235,77 +229,7 @@ export default function UrlInputPanel({
           </div>
         </div>
 
-        <div className="space-y-3 pt-3 border-t border-white/[0.07]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-neutral-200">
-              Tujuan Pemrosesan
-            </span>
-            <span className="text-xs text-neutral-500">Pilih salah satu metode</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <button
-              type="button"
-              onClick={() => setTargetAction && setTargetAction('download')}
-              className={`p-4 rounded-2xl border text-left transition flex items-start gap-3.5 ${
-                targetAction === 'download'
-                  ? 'bg-emerald-500/10 border-emerald-500/50 ring-1 ring-emerald-500/30'
-                  : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'
-              }`}
-            >
-              <div className={`p-2.5 rounded-xl ${targetAction === 'download' ? 'bg-[#1ed760] text-black shadow-md shadow-[#1ed760]/30' : 'bg-white/[0.06] text-neutral-400'}`}>
-                <Download className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-white tracking-tight">
-                    Unduh ke Komputer
-                  </span>
-                  {targetAction === 'download' && (
-                    <span className="music-pill bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      Aktif
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                  Simpan file MP3 kualitas tinggi dengan tag ID3 lengkap & arsip ZIP batch.
-                </p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setTargetAction && setTargetAction('roblox')}
-              className={`p-4 rounded-2xl border text-left transition flex items-start gap-3.5 ${
-                targetAction === 'roblox'
-                  ? 'bg-amber-500/10 border-amber-500/50 ring-1 ring-amber-500/30'
-                  : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'
-              }`}
-            >
-              <div className={`p-2.5 rounded-xl ${targetAction === 'roblox' ? 'bg-[#f59e0b] text-black shadow-md shadow-[#f59e0b]/30' : 'bg-white/[0.06] text-neutral-400'}`}>
-                <CloudUpload className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-white tracking-tight">
-                    Langsung Upload ke Roblox
-                  </span>
-                  {targetAction === 'roblox' && (
-                    <span className="music-pill bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Aktif
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                  Otomatis upload ke akun Roblox Anda via Open Cloud API (khusus lagu &le; 7 menit).
-                </p>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {targetAction === 'roblox' && (
-          <div className="rounded-2xl bg-amber-500/[0.06] border border-amber-500/25 p-4 sm:p-5 space-y-3.5">
+        <div className="rounded-2xl bg-amber-500/[0.06] border border-amber-500/25 p-4 sm:p-5 space-y-3.5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-amber-500/15">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-amber-400" />
@@ -392,7 +316,6 @@ export default function UrlInputPanel({
               Filter Durasi: Batas resmi audio Roblox adalah 7 menit (420 detik). Lagu dengan durasi lebih dari 7 menit otomatis tidak akan ikut diunggah.
             </p>
           </div>
-        )}
 
         <div className="space-y-2 pt-3 border-t border-white/[0.07]">
           <span className="text-xs font-semibold text-neutral-300">
