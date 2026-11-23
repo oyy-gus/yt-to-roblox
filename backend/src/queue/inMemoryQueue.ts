@@ -343,9 +343,10 @@ export class JobQueue extends EventEmitter {
             displayName: track.cleanedTitle,
             description: `Audio: ${track.cleanedTitle}${track.artist ? ' - ' + track.artist : ''}`,
             apiKey: job.robloxConfig?.apiKey,
-            creatorId: job.robloxConfig?.creatorId,
+            accessToken: job.robloxConfig?.accessToken,
+            creatorId: job.robloxConfig?.creatorId || '',
             creatorType: job.robloxConfig?.creatorType || 'user',
-            durationSec: track.durationSec
+            durationSec: track.durationSec || undefined
           });
 
           track.robloxAssetId = uploadResult.assetId;

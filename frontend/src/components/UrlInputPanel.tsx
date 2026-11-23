@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { getNormalizedApiUrl } from '../utils/api';
 import { 
   Search, 
@@ -15,7 +15,10 @@ import {
   ExternalLink,
   ShieldCheck,
   Sparkles,
-  Sliders
+  Sliders,
+  LogIn,
+  LogOut,
+  User
 } from 'lucide-react';
 import type { AudioSettings, RobloxConfig, AudioFormat, AudioQuality, CleanerMode } from '../types/index.js';
 
@@ -33,18 +36,40 @@ export default function UrlInputPanel({
   isLoading, 
   settings, 
   setSettings,
-  robloxConfig = { apiKey: '', creatorId: '', creatorType: 'user' },
+  robloxConfig = { authMode: 'oauth', apiKey: '', creatorId: '', creatorType: 'user' },
   setRobloxConfig
 }: UrlInputPanelProps) {
   const [url, setUrl] = useState('');
   const [inputError, setInputError] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [oauthStatus, setOauthStatus] = useState<{ checked: boolean; configured: boolean; redirectUri: string }>({
+    checked: false,
+    configured: false,
+    redirectUri: 'http://localhost:5000/api/roblox/oauth/callback'
+  });
   const [testStatus, setTestStatus] = useState<{ loading: boolean; success: boolean | null; message: string }>({
     loading: false,
     success: null,
     message: ''
   });
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    fetch(`${getNormalizedApiUrl()}/roblox/oauth/status`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setOauthStatus({
+            checked: true,
+            configured: Boolean(data.configured),
+            redirectUri: data.redirectUri || 'http://localhost:5000/api/roblox/oauth/callback'
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const authMode = robloxConfig?.authMode || (robloxConfig?.accessToken ? 'oauth' : robloxConfig?.apiKey ? 'apikey' : 'oauth');
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -93,8 +118,13 @@ export default function UrlInputPanel({
   };
 
   const handleTestRobloxConnection = async () => {
-    if (!robloxConfig?.apiKey?.trim()) {
-      setTestStatus({ loading: false, success: false, message: 'Masukkan Roblox API Key terlebih dahulu.' });
+    const hasAuth = Boolean(robloxConfig?.accessToken?.trim() || robloxConfig?.apiKey?.trim());
+    if (!hasAuth) {
+      setTestStatus({
+        loading: false,
+        success: false,
+        message: authMode === 'oauth' ? 'Silakan login dengan Roblox terlebih dahulu.' : 'Masukkan Roblox API Key terlebih dahulu.'
+      });
       return;
     }
     if (!robloxConfig?.creatorId?.trim()) {
@@ -234,64 +264,186 @@ export default function UrlInputPanel({
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-amber-400" />
                 <span className="text-xs font-bold text-amber-300">
-                  Konfigurasi Roblox Open Cloud
+                  Autentikasi Roblox Open Cloud
                 </span>
               </div>
-              <a
-                href="https://create.roblox.com/dashboard/credentials"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 font-medium"
-              >
-                <span>Buka Dashboard Kredensial Roblox</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2 space-y-1">
-                <div className="flex justify-between text-xs text-neutral-300">
-                  <span>API Key (Izin: Assets:Write & Assets:Read)</span>
-                </div>
-                <div className="relative flex items-center">
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={robloxConfig?.apiKey || ''}
-                    onChange={(e) => setRobloxConfig && setRobloxConfig({ ...robloxConfig, apiKey: e.target.value })}
-                    placeholder="Contoh: secret-token-xxxxxxxx..."
-                    className="w-full music-input rounded-xl px-3.5 py-2 pr-9 text-xs text-neutral-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 text-neutral-400 hover:text-white"
-                  >
-                    {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-xs text-neutral-300 block">Tipe & Creator ID</span>
-                <div className="flex gap-1.5">
-                  <select
-                    value={robloxConfig?.creatorType || 'user'}
-                    onChange={(e) => setRobloxConfig && setRobloxConfig({ ...robloxConfig, creatorType: e.target.value as 'user' | 'group' })}
-                    className="music-input rounded-xl px-2.5 py-2 text-xs text-neutral-200"
-                  >
-                    <option value="user" className="bg-[#181922]">User</option>
-                    <option value="group" className="bg-[#181922]">Group</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={robloxConfig?.creatorId || ''}
-                    onChange={(e) => setRobloxConfig && setRobloxConfig({ ...robloxConfig, creatorId: e.target.value })}
-                    placeholder="12345678"
-                    className="w-full music-input rounded-xl px-3 py-2 text-xs text-neutral-200"
-                  />
-                </div>
+              <div className="flex items-center gap-1.5 bg-black/30 p-1 rounded-xl border border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTestStatus({ loading: false, success: null, message: '' });
+                    setRobloxConfig && setRobloxConfig({ ...robloxConfig, authMode: 'oauth' });
+                  }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                    authMode === 'oauth'
+                      ? 'bg-[#f59e0b] text-black'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  Login OAuth
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTestStatus({ loading: false, success: null, message: '' });
+                    setRobloxConfig && setRobloxConfig({ ...robloxConfig, authMode: 'apikey' });
+                  }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                    authMode === 'apikey'
+                      ? 'bg-[#f59e0b] text-black'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  API Key
+                </button>
               </div>
             </div>
+
+            {authMode === 'oauth' ? (
+              <div className="space-y-3">
+                {robloxConfig?.accessToken ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {robloxConfig.avatarUrl ? (
+                        <img src={robloxConfig.avatarUrl} alt={robloxConfig.username || 'Roblox'} className="w-9 h-9 rounded-full border border-emerald-500/40 shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-300 shrink-0">
+                          <User className="w-4 h-4" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-white truncate">
+                          {robloxConfig.username || 'Akun Roblox Terhubung'}
+                        </div>
+                        <div className="text-[11px] text-emerald-300/90">
+                          User ID: {robloxConfig.creatorId}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <select
+                        value={robloxConfig.creatorType || 'user'}
+                        onChange={(e) => setRobloxConfig && setRobloxConfig({ ...robloxConfig, creatorType: e.target.value as 'user' | 'group' })}
+                        className="music-input rounded-xl px-2.5 py-1.5 text-xs text-neutral-200"
+                      >
+                        <option value="user" className="bg-[#181922]">Upload ke User</option>
+                        <option value="group" className="bg-[#181922]">Upload ke Group</option>
+                      </select>
+
+                      {robloxConfig.creatorType === 'group' && (
+                        <input
+                          type="text"
+                          value={robloxConfig.creatorId || ''}
+                          onChange={(e) => setRobloxConfig && setRobloxConfig({ ...robloxConfig, creatorId: e.target.value })}
+                          placeholder="Group ID"
+                          className="w-28 music-input rounded-xl px-2.5 py-1.5 text-xs text-neutral-200"
+                        />
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTestStatus({ loading: false, success: null, message: '' });
+                          setRobloxConfig && setRobloxConfig({
+                            authMode: 'oauth',
+                            apiKey: '',
+                            accessToken: undefined,
+                            username: undefined,
+                            avatarUrl: undefined,
+                            creatorId: '',
+                            creatorType: 'user'
+                          });
+                        }}
+                        className="btn-glass px-3 py-1.5 text-xs text-rose-300 hover:text-rose-200 border-rose-500/30 flex items-center gap-1"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const redirectParam = typeof window !== 'undefined' ? `?redirect=${encodeURIComponent(window.location.origin)}` : '';
+                          window.location.href = `${getNormalizedApiUrl()}/roblox/oauth/login${redirectParam}`;
+                        }}
+                        className="px-5 py-2.5 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-black font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#f59e0b]/25 cursor-pointer"
+                      >
+                        <LogIn className="w-4 h-4" />
+                        <span>Login dengan Roblox</span>
+                      </button>
+
+                      <a
+                        href="https://create.roblox.com/dashboard/credentials?activeTab=OAuthTab"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 font-medium"
+                      >
+                        <span>Kelola OAuth 2.0 App Roblox</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+
+                    {oauthStatus.checked && !oauthStatus.configured && (
+                      <div className="text-[11px] text-amber-200/90 bg-black/30 border border-amber-500/20 px-3 py-2 rounded-xl space-y-1">
+                        <p className="font-semibold text-amber-300">Setup OAuth 2.0 diperlukan di backend/.env:</p>
+                        <p>Buat OAuth 2.0 App di Roblox Creator Hub (izin <code className="text-white">openid</code>, <code className="text-white">profile</code>, <code className="text-white">asset:read</code>, <code className="text-white">asset:write</code>) dengan Redirect URI: <code className="text-white select-all">{oauthStatus.redirectUri}</code>, lalu isi <code className="text-white">ROBLOX_CLIENT_ID</code> &amp; <code className="text-white">ROBLOX_CLIENT_SECRET</code> di <code className="text-white">backend/.env</code>.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2 space-y-1">
+                  <div className="flex justify-between text-xs text-neutral-300">
+                    <span>API Key (Izin: Assets:Write &amp; Assets:Read)</span>
+                  </div>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={robloxConfig?.apiKey || ''}
+                      onChange={(e) => setRobloxConfig && setRobloxConfig({ ...robloxConfig, authMode: 'apikey', apiKey: e.target.value })}
+                      placeholder="Contoh: secret-token-xxxxxxxx..."
+                      className="w-full music-input rounded-xl px-3.5 py-2 pr-9 text-xs text-neutral-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 text-neutral-400 hover:text-white"
+                    >
+                      {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-xs text-neutral-300 block">Tipe &amp; Creator ID</span>
+                  <div className="flex gap-1.5">
+                    <select
+                      value={robloxConfig?.creatorType || 'user'}
+                      onChange={(e) => setRobloxConfig && setRobloxConfig({ ...robloxConfig, creatorType: e.target.value as 'user' | 'group' })}
+                      className="music-input rounded-xl px-2.5 py-2 text-xs text-neutral-200"
+                    >
+                      <option value="user" className="bg-[#181922]">User</option>
+                      <option value="group" className="bg-[#181922]">Group</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={robloxConfig?.creatorId || ''}
+                      onChange={(e) => setRobloxConfig && setRobloxConfig({ ...robloxConfig, creatorId: e.target.value })}
+                      placeholder="12345678"
+                      className="w-full music-input rounded-xl px-3 py-2 text-xs text-neutral-200"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-1">
               <button

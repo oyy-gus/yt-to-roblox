@@ -16,9 +16,6 @@ export default function Navbar() {
               <span className="text-base font-bold tracking-tight text-white">
                 Maxistrong
               </span>
-              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                PRO
-              </span>
             </div>
             <p className="text-xs text-neutral-400 hidden sm:block">
               Studio Audio & Music Downloader

@@ -6,15 +6,25 @@ import { RobloxConfig, RobloxUploadResult } from '../types/index.js';
 const ROBLOX_ASSETS_API = 'https://apis.roblox.com/assets/v1/assets';
 const ROBLOX_OPERATIONS_API = 'https://apis.roblox.com/assets/v1';
 
-export async function validateRobloxCredentials({ apiKey, creatorId, creatorType = 'user' }: RobloxConfig): Promise<{ isValid: boolean; reason: string }> {
-  if (!apiKey || !apiKey.trim()) {
-    return { isValid: false, reason: 'Roblox API Key wajib diisi.' };
+function buildRobloxAuthHeaders(auth: { apiKey?: string; accessToken?: string }): Record<string, string> {
+  if (auth.accessToken && auth.accessToken.trim()) {
+    return { Authorization: `Bearer ${auth.accessToken.trim()}` };
+  }
+  if (auth.apiKey && auth.apiKey.trim()) {
+    return { 'x-api-key': auth.apiKey.trim() };
+  }
+  return {};
+}
+
+export async function validateRobloxCredentials({ apiKey, accessToken, creatorId, creatorType = 'user' }: RobloxConfig): Promise<{ isValid: boolean; reason: string }> {
+  const authHeaders = buildRobloxAuthHeaders({ apiKey, accessToken });
+  if (Object.keys(authHeaders).length === 0) {
+    return { isValid: false, reason: 'Login Roblox OAuth atau Roblox API Key wajib diisi.' };
   }
   if (!creatorId || !creatorId.trim()) {
     return { isValid: false, reason: 'Creator ID (User ID atau Group ID) wajib diisi.' };
   }
 
-  const cleanKey = apiKey.trim();
   const cleanId = creatorId.trim();
 
   try {
@@ -25,15 +35,15 @@ export async function validateRobloxCredentials({ apiKey, creatorId, creatorType
     const testUrl = `https://apis.roblox.com/assets/v1/assets?${creatorParam}&maxPageSize=1`;
     const res = await fetch(testUrl, {
       method: 'GET',
-      headers: {
-        'x-api-key': cleanKey
-      }
+      headers: authHeaders
     });
 
     if (res.status === 401 || res.status === 403) {
       return { 
         isValid: false, 
-        reason: 'User not authenticated: Pastikan API Key benar, memiliki izin Assets (Read & Write) di Roblox Creator Hub, dan IP tidak dibatasi (gunakan 0.0.0.0/0).' 
+        reason: accessToken
+          ? 'Sesi OAuth Roblox tidak valid atau izin asset:read / asset:write belum diberikan. Silakan login ulang.'
+          : 'User not authenticated: Pastikan API Key benar, memiliki izin Assets (Read & Write) di Roblox Creator Hub, dan IP tidak dibatasi (gunakan 0.0.0.0/0).' 
       };
     }
 
@@ -55,13 +65,14 @@ export interface UploadAssetParams {
   filePath: string;
   displayName: string;
   description?: string;
-  apiKey: string;
+  apiKey?: string;
+  accessToken?: string;
   creatorId: string;
   creatorType?: 'user' | 'group';
   durationSec?: number;
 }
 
-export async function uploadAudioAsset({ filePath, displayName, description = '', apiKey, creatorId, creatorType = 'user', durationSec }: UploadAssetParams): Promise<RobloxUploadResult> {
+export async function uploadAudioAsset({ filePath, displayName, description = '', apiKey, accessToken, creatorId, creatorType = 'user', durationSec }: UploadAssetParams): Promise<RobloxUploadResult> {
   if (durationSec && durationSec > 420) {
     throw new Error('Durasi audio melebihi batas maksimum 7 menit untuk Roblox Open Cloud.');
   }
@@ -70,11 +81,11 @@ export async function uploadAudioAsset({ filePath, displayName, description = ''
     throw new Error(`File audio tidak ditemukan di path: ${filePath}`);
   }
 
-  const cleanKey = (apiKey || '').trim();
+  const authHeaders = buildRobloxAuthHeaders({ apiKey, accessToken });
   const cleanId = (creatorId || '').trim();
 
-  if (!cleanKey) {
-    throw new Error('Roblox API Key tidak boleh kosong.');
+  if (Object.keys(authHeaders).length === 0) {
+    throw new Error('Token OAuth atau Roblox API Key tidak boleh kosong.');
   }
   if (!cleanId) {
     throw new Error('Roblox Creator ID tidak boleh kosong.');
@@ -107,9 +118,7 @@ export async function uploadAudioAsset({ filePath, displayName, description = ''
 
   const uploadRes = await fetch(ROBLOX_ASSETS_API, {
     method: 'POST',
-    headers: {
-      'x-api-key': cleanKey
-    },
+    headers: authHeaders,
     body: formData
   });
 
@@ -118,9 +127,11 @@ export async function uploadAudioAsset({ filePath, displayName, description = ''
   if (!uploadRes.ok) {
     let errMsg = uploadData.message || uploadData.error || `HTTP ${uploadRes.status}`;
     if (uploadRes.status === 401 || String(errMsg).toLowerCase().includes('not authenticated')) {
-      errMsg = 'User not authenticated (Pastikan API Key memiliki izin Assets:Write di Roblox Creator Hub dan IP diizinkan: 0.0.0.0/0)';
+      errMsg = accessToken
+        ? 'Sesi OAuth Roblox kedaluwarsa atau tidak valid. Silakan login ulang dengan Roblox.'
+        : 'User not authenticated (Pastikan API Key memiliki izin Assets:Write di Roblox Creator Hub dan IP diizinkan: 0.0.0.0/0)';
     } else if (uploadRes.status === 403 || String(errMsg).toLowerCase().includes('forbidden')) {
-      errMsg = 'Forbidden (API Key tidak memiliki izin menulis aset untuk Creator ID ini)';
+      errMsg = 'Forbidden (Akun/API Key tidak memiliki izin menulis aset untuk Creator ID ini)';
     }
     console.error(`[ROBLOX] Upload failed:`, errMsg);
     throw new Error(`Roblox Upload Gagal: ${errMsg}`);
@@ -129,7 +140,7 @@ export async function uploadAudioAsset({ filePath, displayName, description = ''
   if (uploadData.path) {
     const operationPath = uploadData.path;
     console.log(`[ROBLOX] Asset operation queued: ${operationPath}. Polling status...`);
-    return await pollOperationStatus(operationPath, cleanKey);
+    return await pollOperationStatus(operationPath, authHeaders);
   }
 
   if (uploadData.assetId || uploadData.response?.assetId) {
@@ -145,7 +156,7 @@ export async function uploadAudioAsset({ filePath, displayName, description = ''
   throw new Error('Respons dari Roblox tidak memuat ID operasi atau Asset ID yang valid.');
 }
 
-async function pollOperationStatus(operationPath: string, apiKey: string, maxAttempts: number = 20, delayMs: number = 1500): Promise<RobloxUploadResult> {
+async function pollOperationStatus(operationPath: string, authHeaders: Record<string, string>, maxAttempts: number = 20, delayMs: number = 1500): Promise<RobloxUploadResult> {
   const url = `${ROBLOX_OPERATIONS_API}/${operationPath}`;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -154,9 +165,7 @@ async function pollOperationStatus(operationPath: string, apiKey: string, maxAtt
     try {
       const res = await fetch(url, {
         method: 'GET',
-        headers: {
-          'x-api-key': apiKey
-        }
+        headers: authHeaders
       });
 
       if (!res.ok) {

@@ -6,7 +6,11 @@ export type JobStatus = 'queued' | 'active' | 'completed' | 'cancelled' | 'faile
 export type TrackStatus = 'pending' | 'cleaning' | 'processing' | 'completed' | 'failed';
 
 export interface RobloxConfig {
-  apiKey: string;
+  authMode?: 'oauth' | 'apikey';
+  apiKey?: string;
+  accessToken?: string;
+  username?: string;
+  avatarUrl?: string;
   creatorId: string;
   creatorType?: 'user' | 'group';
 }

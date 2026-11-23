@@ -8,7 +8,7 @@ import TrackSelectionList from '../components/TrackSelectionList';
 import JobProgressCard from '../components/JobProgressCard';
 import AudioPreviewPlayer from '../components/AudioPreviewPlayer';
 import Footer from '../components/Footer';
-import { AlertCircle, Sparkles } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import type { AudioSettings, AnalysisData, JobProgressData, TrackItem, TrackOverride, TargetAction, RobloxConfig } from '../types/index.js';
 import { getNormalizedApiUrl } from '../utils/api';
 
@@ -45,11 +45,49 @@ export default function Home() {
       } catch {}
     }
     return {
+      authMode: 'oauth',
       apiKey: '',
       creatorId: '',
       creatorType: 'user'
     };
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const oauthSessionId = params.get('roblox_oauth');
+    const oauthError = params.get('roblox_oauth_error');
+
+    if (oauthError) {
+      setErrorMsg(`Login Roblox gagal: ${oauthError}`);
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    if (oauthSessionId) {
+      window.history.replaceState({}, '', window.location.pathname);
+      fetch(`${getNormalizedApiUrl()}/roblox/oauth/session/${encodeURIComponent(oauthSessionId)}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data?.accessToken) {
+            setRobloxConfig((prev) => ({
+              ...prev,
+              authMode: 'oauth',
+              accessToken: json.data.accessToken,
+              creatorId: json.data.userId || prev.creatorId,
+              creatorType: 'user',
+              username: json.data.username,
+              avatarUrl: json.data.avatarUrl
+            }));
+          } else {
+            setErrorMsg(json.message || 'Gagal mengambil sesi login Roblox.');
+          }
+        })
+        .catch((err) => {
+          setErrorMsg(`Gagal menyelesaikan login Roblox: ${err.message}`);
+        });
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && robloxConfig) {
@@ -259,11 +297,6 @@ export default function Home() {
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 space-y-7">
         <div className="text-center space-y-3 pt-4 pb-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs text-neutral-300">
-            <Sparkles className="w-3.5 h-3.5 text-[#1ed760]" />
-            <span>Pembersih Judul & Upload Audio Roblox Otomatis</span>
-          </div>
-
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
             Upload Audio YouTube ke Roblox
           </h1>

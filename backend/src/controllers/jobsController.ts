@@ -30,8 +30,9 @@ export async function createJobHandler(req: Request, res: Response, next: NextFu
       : (bodySettings?.pitch !== undefined ? bodySettings.pitch : (pitch || 0));
 
     if (targetAction === 'roblox') {
-      if (!robloxConfig || !robloxConfig.apiKey || !robloxConfig.apiKey.trim()) {
-        return res.status(400).json({ success: false, error: 'Roblox API Key wajib diisi untuk mode upload ke Roblox.' });
+      const hasAuth = Boolean(robloxConfig?.accessToken?.trim() || robloxConfig?.apiKey?.trim());
+      if (!robloxConfig || !hasAuth) {
+        return res.status(400).json({ success: false, error: 'Silakan login dengan Roblox OAuth atau masukkan Roblox API Key terlebih dahulu.' });
       }
       if (!robloxConfig.creatorId || !robloxConfig.creatorId.trim()) {
         return res.status(400).json({ success: false, error: 'Roblox Creator ID (User ID atau Group ID) wajib diisi.' });
