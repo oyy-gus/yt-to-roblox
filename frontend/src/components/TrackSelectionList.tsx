@@ -424,7 +424,7 @@ export default function TrackSelectionList({
 
           return (
             <div
-              key={track.id}
+              key={`${track.id}-${index}`}
               className={`rounded-2xl border transition flex flex-col ${
                 isOverRobloxLimit
                   ? 'bg-white/[0.01] border-white/[0.03] opacity-50'

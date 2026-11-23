@@ -21,12 +21,19 @@ export async function analyzeUrlHandler(req: Request, res: Response, next: NextF
     const metadata = await youtubeProvider.analyzeUrl(urlValidation);
     const cleaner = new TitleCleanerEngine();
 
-    const tracksWithPreviews = (metadata.entries || []).map((entry, index) => {
+    const seenIds = new Set<string>();
+    const uniqueEntries = (metadata.entries || []).filter((entry) => {
+      if (!entry.id || seenIds.has(entry.id)) return false;
+      seenIds.add(entry.id);
+      return true;
+    });
+
+    const tracksWithPreviews = uniqueEntries.map((entry, index) => {
       const cleanResult = cleaner.clean(entry.title, {
         mode: cleanerMode as CleanerMode,
         metadataArtist: entry.artist || entry.channel || null,
         format: 'mp3',
-        index: metadata.entries.length > 1 ? index + 1 : null
+        index: uniqueEntries.length > 1 ? index + 1 : null
       });
 
       return {
@@ -54,7 +61,7 @@ export async function analyzeUrlHandler(req: Request, res: Response, next: NextF
         title: metadata.title,
         channel: metadata.channel,
         thumbnail: metadata.thumbnail,
-        totalEntries: metadata.totalEntries,
+        totalEntries: uniqueEntries.length,
         cleanerMode,
         tracks: tracksWithPreviews
       }

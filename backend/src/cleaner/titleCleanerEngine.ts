@@ -57,6 +57,25 @@ export class TitleCleanerEngine {
       };
     }
 
+    if (mode === 'Default') {
+      const untouchedTitle = rawTitle.trim() || 'Untitled Track';
+      let filenameBase = untouchedTitle;
+      if (trackIndex !== null && trackIndex !== undefined) {
+        const paddedIndex = String(trackIndex).padStart(3, '0');
+        filenameBase = `${paddedIndex} - ${untouchedTitle}`;
+      }
+      const ext = outputFormat.startsWith('.') ? outputFormat : `.${outputFormat}`;
+      return {
+        originalTitle: rawTitle,
+        cleanedTitle: untouchedTitle,
+        proposedFilename: sanitizeFilename(filenameBase, ext),
+        detectedArtist: metadataArtist || null,
+        detectedComposer: null,
+        detectedVersion: null,
+        cleaningMode: mode
+      };
+    }
+
     let workStr = normalizeWhitespace(rawTitle);
 
     const detectedComposer = this._detectComposer(workStr);

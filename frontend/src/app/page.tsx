@@ -10,18 +10,7 @@ import AudioPreviewPlayer from '../components/AudioPreviewPlayer';
 import Footer from '../components/Footer';
 import { AlertCircle, Sparkles } from 'lucide-react';
 import type { AudioSettings, AnalysisData, JobProgressData, TrackItem, TrackOverride, TargetAction, RobloxConfig } from '../types/index.js';
-
-function getNormalizedApiUrl(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    let rawUrl = process.env.NEXT_PUBLIC_API_URL.trim().replace(/\/+$/, '');
-    if (!rawUrl.endsWith('/api')) rawUrl = `${rawUrl}/api`;
-    return rawUrl;
-  }
-  if (typeof window !== 'undefined' && window.location.port === '3000') {
-    return 'http://localhost:5000/api';
-  }
-  return '/api';
-}
+import { getNormalizedApiUrl } from '../utils/api';
 
 async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const url = `${getNormalizedApiUrl()}${endpoint}`;
@@ -89,8 +78,15 @@ export default function Home() {
         throw new Error(json.error || 'Gagal menganalisis URL.');
       }
 
-      setAnalysisResult({ ...json.data, url });
-      setSelectedTrackIds((json.data.tracks || []).map((t: TrackItem) => t.id));
+      const seenIds = new Set<string>();
+      const uniqueTracks: TrackItem[] = (json.data.tracks || []).filter((t: TrackItem) => {
+        if (!t.id || seenIds.has(t.id)) return false;
+        seenIds.add(t.id);
+        return true;
+      });
+
+      setAnalysisResult({ ...json.data, tracks: uniqueTracks, totalEntries: uniqueTracks.length, url });
+      setSelectedTrackIds(uniqueTracks.map((t: TrackItem) => t.id));
 
     } catch (err: any) {
       setErrorMsg(err.message || 'Terjadi kesalahan saat memeriksa URL.');

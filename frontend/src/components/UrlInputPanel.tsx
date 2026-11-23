@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { getNormalizedApiUrl } from '../utils/api';
 import { 
   Search, 
   Loader2, 
@@ -110,11 +111,15 @@ export default function UrlInputPanel({
     setTestStatus({ loading: true, success: null, message: 'Menguji koneksi ke Roblox Cloud...' });
 
     try {
-      const res = await fetch('/api/roblox/validate', {
+      const res = await fetch(`${getNormalizedApiUrl()}/roblox/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(robloxConfig)
       });
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(`Server mengembalikan respons non-JSON (HTTP ${res.status}).`);
+      }
       const data = await res.json();
       setTestStatus({
         loading: false,
@@ -462,6 +467,7 @@ export default function UrlInputPanel({
                 onChange={(e) => setSettings({ ...settings, cleanerMode: e.target.value as CleanerMode })}
                 className="w-full music-input rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 cursor-pointer"
               >
+                <option value="Default" className="bg-[#181922]">Default (Tanpa Pembersihan)</option>
                 <option value="Advanced" className="bg-[#181922]">Pembersih Cerdas (Direkomendasikan)</option>
                 <option value="Standard" className="bg-[#181922]">Pembersih Standar</option>
                 <option value="Custom" className="bg-[#181922]">Kustom Aturan</option>
