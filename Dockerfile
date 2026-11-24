@@ -1,10 +1,3 @@
-FROM node:22-slim AS frontend-builder
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
 FROM node:22-slim
 
 RUN apt-get update && apt-get install -y \
@@ -18,16 +11,13 @@ RUN apt-get update && apt-get install -y \
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp
 
-WORKDIR /app/backend
+WORKDIR /app
 
-COPY backend/package*.json ./
-RUN npm ci --only=production
+COPY package*.json ./
+RUN npm ci
 
-COPY backend/ ./
-
-COPY --from=frontend-builder /app/frontend/out ./public_html
-
-RUN mkdir -p tmp
+COPY . .
+RUN npm run build && mkdir -p tmp
 
 ENV PORT=5000
 ENV NODE_ENV=production
