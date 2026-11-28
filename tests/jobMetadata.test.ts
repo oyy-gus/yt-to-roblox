@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { JobQueue } from '../src/server/queue/inMemoryQueue.js';
+import { isPrivateYouTubeVideo } from '../src/server/providers/youtubeProvider.js';
 
 describe('JobQueue Custom Metadata Support', () => {
   const dummyMetadata = {
@@ -135,5 +136,64 @@ describe('JobQueue Custom Metadata Support', () => {
     assert.strictEqual(robloxJob.tracks.length, 1);
     assert.strictEqual(robloxJob.tracks[0].id, 'short-track');
     queue.cancelJob(robloxJob.id);
+  });
+
+  test('Filters out private tracks when targetAction is roblox', () => {
+    const queue = new JobQueue(1);
+    const mixedMetadata = {
+      isDemo: true,
+      type: 'playlist' as const,
+      title: 'Private Filter Test',
+      totalEntries: 2,
+      entries: [
+        {
+          id: 'public-track',
+          title: 'Singer - Public Track',
+          artist: 'Singer',
+          durationSec: 180,
+          thumbnail: 'https://example.com/public.jpg',
+          url: 'https://www.youtube.com/watch?v=public',
+          isPrivate: false
+        },
+        {
+          id: 'private-track',
+          title: '[Private video]',
+          artist: null,
+          durationSec: 0,
+          thumbnail: null,
+          url: 'https://www.youtube.com/watch?v=private',
+          isPrivate: true
+        }
+      ]
+    };
+
+    const robloxJob = queue.createJob({
+      id: 'job-roblox-private-filter-test',
+      type: 'playlist',
+      url: 'https://www.youtube.com/playlist?list=PL123',
+      metadata: mixedMetadata,
+      settings: {
+        cleanerMode: 'Advanced',
+        format: 'mp3',
+        quality: '128',
+        pitch: 0
+      },
+      targetAction: 'roblox',
+      robloxConfig: { apiKey: 'test', creatorId: '123' },
+      selectedTrackIds: ['public-track', 'private-track']
+    });
+
+    assert.strictEqual(robloxJob.tracks.length, 1);
+    assert.strictEqual(robloxJob.tracks[0].id, 'public-track');
+    queue.cancelJob(robloxJob.id);
+  });
+
+  test('isPrivateYouTubeVideo detects private videos from yt-dlp and YouTube API fields', () => {
+    assert.strictEqual(isPrivateYouTubeVideo({ title: '[Private video]' }), true);
+    assert.strictEqual(isPrivateYouTubeVideo({ title: 'Private video' }), true);
+    assert.strictEqual(isPrivateYouTubeVideo({ title: 'My Song', availability: 'private' }), true);
+    assert.strictEqual(isPrivateYouTubeVideo({ title: 'My Song', privacyStatus: 'private' }), true);
+    assert.strictEqual(isPrivateYouTubeVideo({ title: 'My Song', availability: 'public' }), false);
+    assert.strictEqual(isPrivateYouTubeVideo({ title: 'My Song', availability: 'unlisted' }), false);
   });
 });

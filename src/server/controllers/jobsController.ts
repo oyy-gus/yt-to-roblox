@@ -56,11 +56,14 @@ export async function createJobHandler(req: Request, res: Response, next: NextFu
       const requested = selectedTrackIds && selectedTrackIds.length > 0
         ? rawEntries.filter((e: any) => selectedTrackIds.includes(e.id))
         : rawEntries;
-      const eligible = requested.filter((e: any) => !e.durationSec || e.durationSec <= 420);
+      const eligible = requested.filter((e: any) => !e.isPrivate && (!e.durationSec || e.durationSec <= 420));
       if (eligible.length === 0) {
+        const allPrivate = requested.length > 0 && requested.every((e: any) => e.isPrivate);
         return res.status(400).json({
           success: false,
-          error: 'Tidak ada lagu yang dapat diunggah ke Roblox karena seluruh lagu yang dipilih melebihi batas durasi 7 menit.'
+          error: allPrivate
+            ? 'Tidak ada lagu yang dapat diunggah ke Roblox karena video yang dipilih bersifat private.'
+            : 'Tidak ada lagu yang dapat diunggah ke Roblox karena seluruh lagu yang dipilih bersifat private atau melebihi batas durasi 7 menit.'
         });
       }
     }

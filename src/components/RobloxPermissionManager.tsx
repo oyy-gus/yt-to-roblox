@@ -15,7 +15,8 @@ import {
   FileJson,
   Copy,
   Check,
-  Download
+  Download,
+  Calendar
 } from 'lucide-react';
 import { getNormalizedApiUrl } from '../utils/api';
 import type { PermissionGrantResult, PermissionSubjectType, RobloxConfig } from '../types/index.js';
@@ -77,14 +78,29 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
     });
   };
 
-  const [assetTypeFilter, setAssetTypeFilter] = useState<string>('All');
+  const [assetTypeFilter, setAssetTypeFilter] = useState<string>('Audio');
   const [isGranting, setIsGranting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [scanDateMode, setScanDateMode] = useState<'all' | 'date' | 'month'>('all');
+  const [scanDateValue, setScanDateValue] = useState<string>(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
+  const [scanMonthValue, setScanMonthValue] = useState<string>(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
   const [scanResult, setScanResult] = useState<{
     jsonText: string;
     count: number;
     skippedModerated: number;
+    skippedDateFilter: number;
   } | null>(null);
   const [copiedJson, setCopiedJson] = useState(false);
   const [archiveMessage, setArchiveMessage] = useState<string | null>(null);
@@ -117,7 +133,7 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
     });
   }, [assets, assetSearch, assetTypeFilter]);
 
-  const handleLoadAssets = async (append = false) => {
+  const handleLoadAssets = async (append = false, overrideAssetType?: string) => {
     setErrorMsg(null);
     if (!hasAuth) {
       setErrorMsg('Silakan login Roblox OAuth atau isi API Key di panel atas terlebih dahulu.');
@@ -128,32 +144,43 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
       return;
     }
 
+    const effectiveType = overrideAssetType || assetTypeFilter || 'All';
     setIsLoadingAssets(true);
     try {
-      const res = await fetch(`${getNormalizedApiUrl()}/roblox/assets/list`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: robloxConfig.apiKey,
-          accessToken: robloxConfig.accessToken,
-          creatorId: robloxConfig.creatorId,
-          creatorType: robloxConfig.creatorType || 'user',
-          assetType: 'All',
-          pageToken: append ? nextPageToken : undefined,
-          maxPageSize: 50
-        })
-      });
+      let cursor: string | undefined = append ? nextPageToken : undefined;
+      let pages = 0;
+      const accumulated: CreatorAssetItem[] = [];
 
-      const json = await res.json();
-      if (!json.success) {
-        throw new Error(json.error || 'Gagal memuat daftar audio dari Roblox.');
-      }
+      do {
+        const res = await fetch(`${getNormalizedApiUrl()}/roblox/assets/list`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey: robloxConfig.apiKey,
+            accessToken: robloxConfig.accessToken,
+            creatorId: robloxConfig.creatorId,
+            creatorType: robloxConfig.creatorType || 'user',
+            assetType: effectiveType,
+            pageToken: cursor,
+            maxPageSize: 100
+          })
+        });
 
-      const fetched: CreatorAssetItem[] = json.data?.assets || [];
-      setAssets(prev => (append ? [...prev, ...fetched] : fetched));
-      setNextPageToken(json.data?.nextPageToken);
+        const json = await res.json();
+        if (!json.success) {
+          throw new Error(json.error || 'Gagal memuat daftar asset dari Roblox.');
+        }
+
+        const fetched: CreatorAssetItem[] = json.data?.assets || [];
+        accumulated.push(...fetched);
+        cursor = json.data?.nextPageToken;
+        pages++;
+      } while (cursor && pages < 20);
+
+      setAssets(prev => (append ? [...prev, ...accumulated] : accumulated));
+      setNextPageToken(cursor);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal mengambil daftar audio Roblox.');
+      setErrorMsg(err.message || 'Gagal mengambil daftar asset Roblox.');
     } finally {
       setIsLoadingAssets(false);
     }
@@ -284,7 +311,13 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
           apiKey: robloxConfig.apiKey,
           accessToken: robloxConfig.accessToken,
           creatorId: robloxConfig.creatorId,
-          creatorType: robloxConfig.creatorType || 'user'
+          creatorType: robloxConfig.creatorType || 'user',
+          dateFilter: {
+            mode: scanDateMode,
+            date: scanDateMode === 'date' ? scanDateValue : undefined,
+            month: scanDateMode === 'month' ? scanMonthValue : undefined,
+            tzOffsetMinutes: new Date().getTimezoneOffset()
+          }
         })
       });
 
@@ -297,7 +330,8 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
       setScanResult({
         jsonText: JSON.stringify(audios, null, 2),
         count: audios.length,
-        skippedModerated: json.data.skippedModerated || 0
+        skippedModerated: json.data.skippedModerated || 0,
+        skippedDateFilter: json.data.skippedDateFilter || 0
       });
     } catch (err: any) {
       setErrorMsg(err.message || 'Terjadi kesalahan saat scan audio Roblox.');
@@ -404,7 +438,7 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
                   type="button"
                   onClick={() => handleLoadAssets(false)}
                   disabled={isLoadingAssets}
-                  className="btn-glass px-4 py-2 text-xs font-semibold text-amber-300 border-amber-500/30 flex items-center justify-center gap-2 shrink-0"
+                  className="btn-glass px-4 py-2 text-xs font-semibold text-amber-300 border-amber-500/30 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
                 >
                   {isLoadingAssets ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -414,29 +448,34 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
                   <span>{assets.length > 0 ? 'Muat Ulang Daftar Asset' : 'Muat Asset dari Akun Roblox'}</span>
                 </button>
 
+                <select
+                  value={assetTypeFilter}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    setAssetTypeFilter(nextType);
+                    if (assets.length > 0) {
+                      handleLoadAssets(false, nextType);
+                    }
+                  }}
+                  className="music-input rounded-xl px-3 py-2 text-xs text-neutral-200"
+                >
+                  <option value="Audio" className="bg-[#181922]">Audio</option>
+                  <option value="All" className="bg-[#181922]">Semua Tipe</option>
+                  <option value="Animation" className="bg-[#181922]">Animation</option>
+                  <option value="Image" className="bg-[#181922]">Image / Decal</option>
+                  <option value="Mesh" className="bg-[#181922]">Mesh / MeshPart</option>
+                  <option value="Model" className="bg-[#181922]">Model</option>
+                  <option value="Video" className="bg-[#181922]">Video</option>
+                </select>
+
                 {assets.length > 0 && (
-                  <>
-                    <select
-                      value={assetTypeFilter}
-                      onChange={(e) => setAssetTypeFilter(e.target.value)}
-                      className="music-input rounded-xl px-3 py-2 text-xs text-neutral-200"
-                    >
-                      <option value="All" className="bg-[#181922]">Semua Tipe</option>
-                      <option value="Audio" className="bg-[#181922]">Audio</option>
-                      <option value="Animation" className="bg-[#181922]">Animation</option>
-                      <option value="Image" className="bg-[#181922]">Image / Decal</option>
-                      <option value="Mesh" className="bg-[#181922]">Mesh / MeshPart</option>
-                      <option value="Model" className="bg-[#181922]">Model</option>
-                      <option value="Video" className="bg-[#181922]">Video</option>
-                    </select>
-                    <input
-                      type="text"
-                      value={assetSearch}
-                      onChange={(e) => setAssetSearch(e.target.value)}
-                      placeholder="Cari nama asset atau ID..."
-                      className="flex-1 music-input rounded-xl px-3.5 py-2 text-xs text-neutral-200"
-                    />
-                  </>
+                  <input
+                    type="text"
+                    value={assetSearch}
+                    onChange={(e) => setAssetSearch(e.target.value)}
+                    placeholder="Cari nama asset atau ID..."
+                    className="flex-1 music-input rounded-xl px-3.5 py-2 text-xs text-neutral-200"
+                  />
                 )}
               </div>
 
@@ -616,7 +655,7 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
                     .filter(r => !r.success)
                     .map((r, i) => (
                       <div key={`${r.assetId}-${r.targetId}-${i}`}>
-                        Asset {r.assetId} &rarr; {r.targetType} {r.targetId}: {r.error}
+                        Asset {r.assetId} &rarr; {r.targetType} {r.targetId}: {typeof r.error === 'string' ? r.error : JSON.stringify(r.error)}
                       </div>
                     ))}
                 </div>
@@ -637,7 +676,8 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
                 <div className="flex items-center gap-2 text-emerald-300 font-semibold">
                   <FileJson className="w-4 h-4" />
                   <span>
-                    Hasil Scan: {scanResult.count} audio aktif ({scanResult.skippedModerated} moderated/archived dilewati)
+                    Hasil Scan: {scanResult.count} audio aktif ({scanResult.skippedModerated} moderated/archived dilewati
+                    {scanResult.skippedDateFilter > 0 ? `, ${scanResult.skippedDateFilter} di luar filter tanggal` : ''})
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -678,6 +718,97 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
               </pre>
             </div>
           )}
+
+          <div className="rounded-xl p-3.5 border border-white/[0.08] bg-black/25 space-y-2.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-neutral-200 font-semibold">
+                <Calendar className="w-4 h-4 text-emerald-400" />
+                <span>Filter Tanggal Scan Audio</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setScanDateMode('all')}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition cursor-pointer ${
+                    scanDateMode === 'all'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-white/[0.04] text-neutral-400 border-white/[0.08] hover:text-white'
+                  }`}
+                >
+                  Semua Tanggal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScanDateMode('date')}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition cursor-pointer ${
+                    scanDateMode === 'date'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-white/[0.04] text-neutral-400 border-white/[0.08] hover:text-white'
+                  }`}
+                >
+                  Tanggal, Bulan &amp; Tahun
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScanDateMode('month')}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition cursor-pointer ${
+                    scanDateMode === 'month'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-white/[0.04] text-neutral-400 border-white/[0.08] hover:text-white'
+                  }`}
+                >
+                  Bulan &amp; Tahun Sama
+                </button>
+              </div>
+            </div>
+
+            {scanDateMode === 'date' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  value={scanDateValue}
+                  onChange={(e) => setScanDateValue(e.target.value)}
+                  className="music-input rounded-xl px-3 py-1.5 text-xs text-neutral-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    const y = now.getFullYear();
+                    const m = String(now.getMonth() + 1).padStart(2, '0');
+                    const d = String(now.getDate()).padStart(2, '0');
+                    setScanDateValue(`${y}-${m}-${d}`);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-neutral-200 text-[11px] font-medium cursor-pointer"
+                >
+                  Tanggal Sama (Hari Ini)
+                </button>
+              </div>
+            )}
+
+            {scanDateMode === 'month' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="month"
+                  value={scanMonthValue}
+                  onChange={(e) => setScanMonthValue(e.target.value)}
+                  className="music-input rounded-xl px-3 py-1.5 text-xs text-neutral-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    const y = now.getFullYear();
+                    const m = String(now.getMonth() + 1).padStart(2, '0');
+                    setScanMonthValue(`${y}-${m}`);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-neutral-200 text-[11px] font-medium cursor-pointer"
+                >
+                  Bulan &amp; Tahun Ini
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2.5">
             <button

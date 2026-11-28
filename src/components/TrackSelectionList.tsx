@@ -90,6 +90,8 @@ export default function TrackSelectionList({
 }: TrackSelectionListProps) {
   const [showMetadataEditor, setShowMetadataEditor] = useState(false);
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState('');
 
   const [batchForm, setBatchForm] = useState({
     pitch: '',
@@ -115,6 +117,25 @@ export default function TrackSelectionList({
     if (onBatchApplyMetadata) {
       onBatchApplyMetadata(batchForm);
     }
+  };
+
+  const startEditingTitle = (trackId: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTitleId(trackId);
+    setEditingTitleValue(currentTitle);
+  };
+
+  const commitEditingTitle = (trackId: string) => {
+    if (editingTitleId !== trackId) return;
+    const trimmed = editingTitleValue.trim();
+    if (trimmed) {
+      onUpdateMetadata(trackId, { title: trimmed });
+    }
+    setEditingTitleId(null);
+  };
+
+  const cancelEditingTitle = () => {
+    setEditingTitleId(null);
   };
 
   const getEffectiveTrackData = (track: TrackItem, index: number) => {
@@ -356,9 +377,36 @@ export default function TrackSelectionList({
                     <span className="text-xs text-neutral-500 font-semibold">
                       {index + 1}.
                     </span>
-                    <span className="text-sm font-semibold text-white tracking-tight truncate">
-                      {effective.title}
-                    </span>
+                    {editingTitleId === track.id ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingTitleValue}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setEditingTitleValue(e.target.value)}
+                        onBlur={() => commitEditingTitle(track.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitEditingTitle(track.id);
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelEditingTitle();
+                          }
+                        }}
+                        aria-label={`Ubah nama lagu ${effective.title}`}
+                        className="music-input rounded-lg px-2.5 py-0.5 text-sm font-semibold text-white min-w-[180px] flex-1 max-w-md border border-[#1ed760]/60 focus:outline-none"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => startEditingTitle(track.id, effective.title, e)}
+                        title="Klik untuk ubah nama (tekan Enter untuk simpan)"
+                        className="text-left text-sm font-semibold text-white tracking-tight truncate hover:text-emerald-300 hover:underline decoration-emerald-400/60 underline-offset-4 cursor-text"
+                      >
+                        {effective.title}
+                      </button>
+                    )}
 
                     <button
                       type="button"

@@ -41,7 +41,7 @@ export class JobQueue extends EventEmitter {
       : rawEntries;
 
     if (targetAction === 'roblox') {
-      entriesToProcess = entriesToProcess.filter(e => !e.durationSec || e.durationSec <= 420);
+      entriesToProcess = entriesToProcess.filter(e => !e.isPrivate && (!e.durationSec || e.durationSec <= 420));
     }
 
     const tracks: TrackItem[] = entriesToProcess.map((entry, index) => {

@@ -5,6 +5,22 @@ import { BaseProviderAdapter } from './adapter.js';
 import { MockProviderAdapter } from './mockProvider.js';
 import type { UrlInfo, ProviderMetadata } from '../types/index.js';
 
+export function isPrivateYouTubeVideo(info: {
+  title?: string | null;
+  availability?: string | null;
+  privacyStatus?: string | null;
+}): boolean {
+  const availability = String(info.availability || '').trim().toLowerCase();
+  const privacyStatus = String(info.privacyStatus || '').trim().toLowerCase();
+  const title = String(info.title || '').trim();
+
+  if (availability === 'private' || privacyStatus === 'private') {
+    return true;
+  }
+
+  return /^\[?\s*private video\s*\]?$/i.test(title);
+}
+
 export class YouTubeProviderAdapter extends BaseProviderAdapter {
   private mockAdapter: MockProviderAdapter;
   private forceMock: boolean;
@@ -78,7 +94,7 @@ export class YouTubeProviderAdapter extends BaseProviderAdapter {
 
       const playlistSnippet = plData.items[0].snippet;
 
-      const itemsRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${listId}&maxResults=50&key=${apiKey}`);
+      const itemsRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails,status&playlistId=${listId}&maxResults=50&key=${apiKey}`);
       const itemsData = await itemsRes.json() as any;
       if (!itemsRes.ok || !itemsData.items) {
         throw new Error(itemsData.error?.message || 'Failed to fetch playlist items via YouTube Data API');
@@ -88,15 +104,20 @@ export class YouTubeProviderAdapter extends BaseProviderAdapter {
         const vId = item.snippet?.resourceId?.videoId || item.contentDetails?.videoId;
         const thumbnails = item.snippet?.thumbnails;
         const bestThumb = thumbnails?.high?.url || thumbnails?.medium?.url || thumbnails?.default?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;//i.ytimg.com/vi/${vId}/hqdefault.jpg`;
+        const title = item.snippet?.title || 'Untitled Track';
 
         return {
           id: vId || `track-${idx}`,
-          title: item.snippet?.title || 'Untitled Track',
+          title,
           artist: item.snippet?.videoOwnerChannelTitle || item.snippet?.channelTitle || null,
           channel: item.snippet?.videoOwnerChannelTitle || item.snippet?.channelTitle || null,
           durationSec: 0,
           thumbnail: bestThumb,
-          url: vId ? `https://www.youtube.com/watch?v=${vId}` : undefined
+          url: vId ? `https://www.youtube.com/watch?v=${vId}` : undefined,
+          isPrivate: isPrivateYouTubeVideo({
+            title,
+            privacyStatus: item.status?.privacyStatus
+          })
         };
       });
 
@@ -112,15 +133,20 @@ export class YouTubeProviderAdapter extends BaseProviderAdapter {
     }
 
     if (videoId) {
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`);
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,status&id=${videoId}&key=${apiKey}`);
       const vData = await vRes.json() as any;
       if (!vRes.ok || !vData.items || vData.items.length === 0) {
         throw new Error(vData.error?.message || 'Video not found via YouTube Data API');
       }
 
       const snippet = vData.items[0].snippet;
+      const status = vData.items[0].status;
       const thumbnails = snippet.thumbnails;
       const bestThumb = thumbnails?.high?.url || thumbnails?.medium?.url || thumbnails?.default?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      const isPrivate = isPrivateYouTubeVideo({
+        title: snippet.title,
+        privacyStatus: status?.privacyStatus
+      });
 
       return {
         isDemo: false,
@@ -139,7 +165,8 @@ export class YouTubeProviderAdapter extends BaseProviderAdapter {
             channel: snippet.channelTitle || null,
             durationSec: 0,
             thumbnail: bestThumb,
-            url: urlInfo.normalizedUrl
+            url: urlInfo.normalizedUrl,
+            isPrivate
           }
         ]
       };
@@ -252,7 +279,11 @@ export class YouTubeProviderAdapter extends BaseProviderAdapter {
           channel: item.uploader || item.channel || null,
           durationSec: item.duration || 0,
           thumbnail,
-          url: videoUrl
+          url: videoUrl,
+          isPrivate: isPrivateYouTubeVideo({
+            title: item.title,
+            availability: item.availability
+          })
         };
       });
 
@@ -294,7 +325,11 @@ export class YouTubeProviderAdapter extends BaseProviderAdapter {
           channel: data.uploader || null,
           durationSec: data.duration || 0,
           thumbnail,
-          url: urlInfo.normalizedUrl || ''
+          url: urlInfo.normalizedUrl || '',
+          isPrivate: isPrivateYouTubeVideo({
+            title: data.title,
+            availability: data.availability
+          })
         }
       ]
     };

@@ -291,7 +291,14 @@ export async function grantAssetPermissions({
         const data = await res.json().catch(() => ({})) as any;
 
         if (!res.ok) {
-          let errMsg = data.message || data.error || `HTTP ${res.status}`;
+          const rawErr = data?.error;
+          const errDetail = typeof rawErr === 'string'
+            ? rawErr
+            : (rawErr?.message || rawErr?.code || '');
+          let errMsg = String(data?.message || errDetail || `HTTP ${res.status}`);
+          if (errMsg.toLowerCase().includes('subjecttype')) {
+            errMsg = `Roblox menolak target "${subjectType}" (${errMsg}). Untuk Audio, gunakan target Universe ID (ID Experience/Game Roblox).`;
+          }
           if (res.status === 401) {
             errMsg = accessToken
               ? 'Sesi OAuth kedaluwarsa atau belum memiliki izin asset:write.'
@@ -364,19 +371,64 @@ export async function listCreatorAssets({
     throw new Error('Creator ID (User ID atau Group ID) harus berupa angka yang valid.');
   }
 
-  const params = new URLSearchParams();
   if (creatorType === 'group') {
-    params.set('creator.groupId', cleanId);
-  } else {
-    params.set('creator.userId', cleanId);
-  }
-  params.set('maxPageSize', String(Math.min(Math.max(maxPageSize, 1), 100)));
-  if (pageToken) {
-    params.set('pageToken', pageToken);
+    throw new Error('Roblox Open Cloud tidak mendukung pengambilan daftar aset Group secara langsung. Gunakan mode "Masukkan Asset ID Manual" untuk aset Group.');
   }
 
-  const url = `${ROBLOX_ASSETS_API}?${params.toString()}`;
-  const res = await fetch(url, {
+  const normalizedFilter = (assetType || 'All').trim().toLowerCase();
+  const limit = Math.min(Math.max(maxPageSize, 1), 100);
+
+  // Use Roblox Inventory API v2 for Audio assets so displayName (assetName) and created timestamp are included
+  if (normalizedFilter === 'audio') {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      sortOrder: 'Desc'
+    });
+    if (pageToken) {
+      params.set('cursor', pageToken);
+    }
+
+    const invUrl = `https://inventory.roblox.com/v2/users/${cleanId}/inventory/3?${params.toString()}`;
+    const res = await fetch(invUrl, { method: 'GET' });
+    const data = await res.json().catch(() => ({})) as any;
+
+    if (!res.ok) {
+      if (res.status === 403) {
+        throw new Error('Inventory audio akun Roblox ini bersifat privat. Buka pengaturan privasi Inventory Roblox agar dapat dipindai.');
+      }
+      throw new Error(data.errors?.[0]?.message || data.message || `Gagal mengambil daftar audio Roblox (HTTP ${res.status}).`);
+    }
+
+    const rawItems: any[] = Array.isArray(data.data) ? data.data : [];
+    const mappedAssets: CreatorAssetItem[] = rawItems.map(a => {
+      const assetId = String(a.assetId || '');
+      return {
+        assetId,
+        displayName: String(a.assetName || `Audio ${assetId}`),
+        assetType: 'Audio',
+        moderationState: 'Approved',
+        state: 'Active',
+        createTime: a.created ? String(a.created) : undefined,
+        assetUrl: `https://create.roblox.com/dashboard/creations/marketplace/${assetId}/configure`
+      };
+    });
+
+    return {
+      assets: mappedAssets,
+      nextPageToken: data.nextPageCursor ? String(data.nextPageCursor) : undefined
+    };
+  }
+
+  // Use Roblox Open Cloud v2 inventory-items for general/multi-type asset listing
+  const cloudParams = new URLSearchParams({
+    maxPageSize: String(limit)
+  });
+  if (pageToken) {
+    cloudParams.set('pageToken', pageToken);
+  }
+
+  const cloudUrl = `https://apis.roblox.com/cloud/v2/users/${cleanId}/inventory-items?${cloudParams.toString()}`;
+  const res = await fetch(cloudUrl, {
     method: 'GET',
     headers: authHeaders
   });
@@ -387,38 +439,41 @@ export async function listCreatorAssets({
     if (res.status === 401 || res.status === 403) {
       throw new Error(
         accessToken
-          ? 'Sesi OAuth tidak valid atau belum memiliki izin asset:read.'
-          : 'API Key tidak valid atau belum memiliki izin Assets:Read.'
+          ? 'Sesi OAuth tidak valid atau belum memiliki izin user.inventory-item:read.'
+          : 'API Key tidak valid atau belum memiliki izin Inventory:Read.'
       );
     }
     throw new Error(data.message || data.error || `Gagal mengambil daftar asset Roblox (HTTP ${res.status}).`);
   }
 
-  const normalizedFilter = (assetType || 'All').trim().toLowerCase();
-  const rawAssets: any[] = Array.isArray(data.assets) ? data.assets : [];
-  const mappedAssets: CreatorAssetItem[] = rawAssets
-    .filter(a => {
-      if (!normalizedFilter || normalizedFilter === 'all') return true;
-      const itemType = String(a.assetType || '').toLowerCase();
-      if (normalizedFilter === 'image') {
-        return itemType === 'image' || itemType === 'decal';
-      }
-      if (normalizedFilter === 'mesh') {
-        return itemType === 'mesh' || itemType === 'meshpart';
-      }
-      return itemType === normalizedFilter;
-    })
-    .map(a => {
-      const assetId = String(a.assetId || '');
+  const rawItems: any[] = Array.isArray(data.inventoryItems) ? data.inventoryItems : [];
+  const mappedAssets: CreatorAssetItem[] = rawItems
+    .map(item => {
+      const details = item.assetDetails || {};
+      const assetId = String(details.assetId || '');
+      const rawType = String(details.inventoryItemAssetType || 'Asset');
+      const normalizedType = rawType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
       return {
         assetId,
-        displayName: String(a.displayName || `Asset ${assetId}`),
-        assetType: String(a.assetType || 'Asset'),
-        moderationState: String(a.moderationResult?.moderationState || 'UNKNOWN'),
-        state: a.state ? String(a.state) : undefined,
-        createTime: a.createTime ? String(a.createTime) : undefined,
-        assetUrl: `https://create.roblox.com/dashboard/creations/marketplace/${assetId}/configure`//create.roblox.com/dashboard/creations/marketplace/${assetId}/configure`,
+        displayName: `${normalizedType} ${assetId}`,
+        assetType: rawType,
+        moderationState: 'UNKNOWN',
+        state: 'Active',
+        createTime: item.addTime ? String(item.addTime) : undefined,
+        assetUrl: `https://create.roblox.com/dashboard/creations/marketplace/${assetId}/configure`
       };
+    })
+    .filter(a => {
+      if (!a.assetId) return false;
+      if (!normalizedFilter || normalizedFilter === 'all') return true;
+      const itemType = a.assetType.toLowerCase();
+      if (normalizedFilter === 'image') {
+        return itemType.includes('image') || itemType.includes('decal');
+      }
+      if (normalizedFilter === 'mesh') {
+        return itemType.includes('mesh');
+      }
+      return itemType.includes(normalizedFilter);
     });
 
   return {
@@ -565,6 +620,47 @@ export interface ScannedAudioEntry {
   name: string;
 }
 
+export interface ScanDateFilter {
+  mode: 'all' | 'date' | 'month';
+  date?: string;
+  month?: string;
+  tzOffsetMinutes?: number;
+}
+
+export function matchesScanDateFilter(createTime?: string, dateFilter?: ScanDateFilter): boolean {
+  if (!dateFilter || dateFilter.mode === 'all') {
+    return true;
+  }
+  if (!createTime) {
+    return false;
+  }
+
+  const parsed = new Date(createTime);
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
+
+  const offsetMinutes = typeof dateFilter.tzOffsetMinutes === 'number' && Number.isFinite(dateFilter.tzOffsetMinutes)
+    ? dateFilter.tzOffsetMinutes
+    : 0;
+  const localDate = new Date(parsed.getTime() - offsetMinutes * 60_000);
+  const year = localDate.getUTCFullYear();
+  const month = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(localDate.getUTCDate()).padStart(2, '0');
+
+  if (dateFilter.mode === 'date') {
+    if (!dateFilter.date) return true;
+    return `${year}-${month}-${day}` === dateFilter.date.trim();
+  }
+
+  if (dateFilter.mode === 'month') {
+    if (!dateFilter.month) return true;
+    return `${year}-${month}` === dateFilter.month.trim();
+  }
+
+  return true;
+}
+
 /**
  * Scans all active, non-moderated Audio assets owned by the creator and returns
  * a clean list of { id, name } entries suitable for JSON export.
@@ -573,13 +669,15 @@ export async function scanCreatorAudioAssets({
   apiKey,
   accessToken,
   creatorId,
-  creatorType = 'user'
+  creatorType = 'user',
+  dateFilter
 }: {
   apiKey?: string;
   accessToken?: string;
   creatorId: string;
   creatorType?: 'user' | 'group';
-}): Promise<{ audios: ScannedAudioEntry[]; totalScanned: number; skippedModerated: number }> {
+  dateFilter?: ScanDateFilter;
+}): Promise<{ audios: ScannedAudioEntry[]; totalScanned: number; skippedModerated: number; skippedDateFilter: number }> {
   if (!creatorId || !creatorId.trim()) {
     throw new Error('Creator ID (User ID atau Group ID) wajib diisi untuk scan audio.');
   }
@@ -604,23 +702,76 @@ export async function scanCreatorAudioAssets({
   } while (pageToken && pages < 20);
 
   let skippedModerated = 0;
-  const audios: ScannedAudioEntry[] = [];
+  let skippedDateFilter = 0;
+  const dateMatchedAssets: CreatorAssetItem[] = [];
 
   for (const asset of allAudioAssets) {
-    const isArchived = String(asset.state || '').toLowerCase() === 'archived';
-    if (isAssetModerated(asset.moderationState) || isArchived) {
-      skippedModerated++;
+    if (!matchesScanDateFilter(asset.createTime, dateFilter)) {
+      skippedDateFilter++;
       continue;
     }
-    audios.push({
-      id: asset.assetId,
-      name: asset.displayName
-    });
+    dateMatchedAssets.push(asset);
+  }
+
+  const authHeaders = buildRobloxAuthHeaders({ apiKey, accessToken });
+  const audios: ScannedAudioEntry[] = [];
+  const batchSize = 10;
+
+  for (let i = 0; i < dateMatchedAssets.length; i += batchSize) {
+    const batch = dateMatchedAssets.slice(i, i + batchSize);
+    const checked = await Promise.all(
+      batch.map(async (asset) => {
+        let modState = asset.moderationState;
+        let state = asset.state || 'Active';
+        let name = asset.displayName;
+
+        if (Object.keys(authHeaders).length > 0) {
+          try {
+            let res = await fetch(`${ROBLOX_ASSETS_API}/${asset.assetId}`, {
+              method: 'GET',
+              headers: authHeaders
+            });
+            if (res.status === 429) {
+              await new Promise(r => setTimeout(r, 1000));
+              res = await fetch(`${ROBLOX_ASSETS_API}/${asset.assetId}`, {
+                method: 'GET',
+                headers: authHeaders
+              });
+            }
+            if (res.ok) {
+              const detail = await res.json().catch(() => null) as any;
+              if (detail) {
+                modState = String(detail.moderationResult?.moderationState || modState);
+                state = String(detail.state || state);
+                if (detail.displayName) name = String(detail.displayName);
+              }
+            }
+          } catch {
+            // Keep inventory metadata if detail lookup fails
+          }
+        }
+
+        const isArchived = String(state || '').toLowerCase() === 'archived';
+        if (isAssetModerated(modState) || isArchived) {
+          return null;
+        }
+        return { id: asset.assetId, name };
+      })
+    );
+
+    for (const entry of checked) {
+      if (entry === null) {
+        skippedModerated++;
+      } else {
+        audios.push(entry);
+      }
+    }
   }
 
   return {
     audios,
     totalScanned: allAudioAssets.length,
-    skippedModerated
+    skippedModerated,
+    skippedDateFilter
   };
 }

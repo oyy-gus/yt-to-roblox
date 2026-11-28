@@ -58,6 +58,7 @@ export interface RawEntry {
   url?: string;
   audioUrl?: string;
   isDirectAudio?: boolean;
+  isPrivate?: boolean;
 }
 
 export interface ProviderMetadata {

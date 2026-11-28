@@ -25,17 +25,27 @@ export async function analyzeUrlHandler(req: Request, res: Response, next: NextF
     const metadata = await youtubeProvider.analyzeUrl(urlValidation);
 
     const seenIds = new Set<string>();
-    const uniqueEntries = (metadata.entries || []).filter((entry) => {
+    const rawEntries = metadata.entries || [];
+    const uniqueEntries = rawEntries.filter((entry) => {
       if (!entry.id || seenIds.has(entry.id)) return false;
+      if (entry.isPrivate) return false;
       if (entry.durationSec && entry.durationSec > 420) return false;
       seenIds.add(entry.id);
       return true;
     });
 
-    if ((metadata.entries || []).length > 0 && uniqueEntries.length === 0) {
+    if (rawEntries.length > 0 && uniqueEntries.length === 0) {
+      const allPrivate = rawEntries.every((entry) => entry.isPrivate);
+      const hasPrivate = rawEntries.some((entry) => entry.isPrivate);
+      const errorMsg = allPrivate
+        ? 'Tidak ada lagu yang ditampilkan karena video bersifat private.'
+        : hasPrivate
+          ? 'Tidak ada lagu yang ditampilkan karena semua lagu bersifat private atau berdurasi lebih dari 7 menit (batas maksimum Roblox).'
+          : 'Tidak ada lagu yang ditampilkan karena semua lagu berdurasi lebih dari 7 menit (batas maksimum Roblox).';
+
       return res.status(400).json({
         success: false,
-        error: 'Tidak ada lagu yang ditampilkan karena semua lagu berdurasi lebih dari 7 menit (batas maksimum Roblox).'
+        error: errorMsg
       });
     }
 
