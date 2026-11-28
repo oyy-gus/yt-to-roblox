@@ -348,10 +348,6 @@ export interface ListCreatorAssetsParams {
   maxPageSize?: number;
 }
 
-/**
- * Lists existing assets (Audio, Animation, Decal, Mesh, Model, Video, etc.)
- * owned by the configured Roblox User or Group.
- */
 export async function listCreatorAssets({
   apiKey,
   accessToken,
@@ -378,7 +374,6 @@ export async function listCreatorAssets({
   const normalizedFilter = (assetType || 'All').trim().toLowerCase();
   const limit = Math.min(Math.max(maxPageSize, 1), 100);
 
-  // Use Roblox Inventory API v2 for Audio assets so displayName (assetName) and created timestamp are included
   if (normalizedFilter === 'audio') {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -419,7 +414,6 @@ export async function listCreatorAssets({
     };
   }
 
-  // Use Roblox Open Cloud v2 inventory-items for general/multi-type asset listing
   const cloudParams = new URLSearchParams({
     maxPageSize: String(limit)
   });
@@ -544,9 +538,6 @@ export async function archiveAsset({
   }
 }
 
-/**
- * Scans creator assets (or archives explicit assetIds) that are moderated/rejected and not yet archived.
- */
 export async function archiveModeratedAssets({
   apiKey,
   accessToken,
@@ -616,8 +607,27 @@ export async function archiveModeratedAssets({
 }
 
 export interface ScannedAudioEntry {
-  id: string;
-  name: string;
+  title: string;
+  sound_id: string;
+  speed?: number;
+}
+
+export function formatAudioJsonEntry(
+  title: string,
+  soundId: string,
+  speed?: number | string | null
+): ScannedAudioEntry {
+  const entry: ScannedAudioEntry = {
+    title,
+    sound_id: String(soundId)
+  };
+  if (speed !== undefined && speed !== null && String(speed).trim() !== '') {
+    const parsed = typeof speed === 'number' ? speed : parseFloat(String(speed));
+    if (Number.isFinite(parsed) && Math.abs(parsed - 1) > 0.001) {
+      entry.speed = parsed;
+    }
+  }
+  return entry;
 }
 
 export interface ScanDateFilter {
@@ -661,22 +671,20 @@ export function matchesScanDateFilter(createTime?: string, dateFilter?: ScanDate
   return true;
 }
 
-/**
- * Scans all active, non-moderated Audio assets owned by the creator and returns
- * a clean list of { id, name } entries suitable for JSON export.
- */
 export async function scanCreatorAudioAssets({
   apiKey,
   accessToken,
   creatorId,
   creatorType = 'user',
-  dateFilter
+  dateFilter,
+  speed
 }: {
   apiKey?: string;
   accessToken?: string;
   creatorId: string;
   creatorType?: 'user' | 'group';
   dateFilter?: ScanDateFilter;
+  speed?: number | string | null;
 }): Promise<{ audios: ScannedAudioEntry[]; totalScanned: number; skippedModerated: number; skippedDateFilter: number }> {
   if (!creatorId || !creatorId.trim()) {
     throw new Error('Creator ID (User ID atau Group ID) wajib diisi untuk scan audio.');
@@ -747,7 +755,6 @@ export async function scanCreatorAudioAssets({
               }
             }
           } catch {
-            // Keep inventory metadata if detail lookup fails
           }
         }
 
@@ -755,7 +762,7 @@ export async function scanCreatorAudioAssets({
         if (isAssetModerated(modState) || isArchived) {
           return null;
         }
-        return { id: asset.assetId, name };
+        return formatAudioJsonEntry(name, asset.assetId, speed);
       })
     );
 

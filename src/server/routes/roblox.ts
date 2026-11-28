@@ -299,13 +299,14 @@ router.post('/assets/archive-moderated', async (req, res) => {
 
 router.post('/assets/scan', async (req, res) => {
   try {
-    const { apiKey, accessToken, creatorId, creatorType = 'user', dateFilter } = req.body;
+    const { apiKey, accessToken, creatorId, creatorType = 'user', dateFilter, speed } = req.body;
     const data = await scanCreatorAudioAssets({
       apiKey,
       accessToken,
       creatorId,
       creatorType,
-      dateFilter
+      dateFilter,
+      speed
     });
     return res.json({
       success: true,

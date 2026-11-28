@@ -224,10 +224,19 @@ export default function JobProgressCard({ job, onCancelJob }: JobProgressCardPro
       {isFinished && job.targetAction === 'roblox' && completedTracksCount > 0 && (() => {
         const uploadedJsonList = job.tracks
           .filter(t => t.robloxAssetId && !t.robloxArchived && !(t.robloxModeration || '').toUpperCase().includes('REJECTED'))
-          .map(t => ({
-            id: String(t.robloxAssetId),
-            name: t.cleanedTitle || t.originalTitle || `Audio ${t.robloxAssetId}`
-          }));
+          .map(t => {
+            const entry: { title: string; sound_id: string; speed?: number } = {
+              title: t.cleanedTitle || t.originalTitle || `Audio ${t.robloxAssetId}`,
+              sound_id: String(t.robloxAssetId)
+            };
+            if (t.robloxInfo?.type === 'PlaybackSpeed' && t.robloxInfo.value) {
+              const parsedSpeed = parseFloat(t.robloxInfo.value);
+              if (Number.isFinite(parsedSpeed) && Math.abs(parsedSpeed - 1) > 0.001) {
+                entry.speed = parsedSpeed;
+              }
+            }
+            return entry;
+          });
         const uploadedJsonText = JSON.stringify(uploadedJsonList, null, 2);
 
         return (

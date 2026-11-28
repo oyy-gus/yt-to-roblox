@@ -96,6 +96,7 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
     const m = String(now.getMonth() + 1).padStart(2, '0');
     return `${y}-${m}`;
   });
+  const [scanSpeedValue, setScanSpeedValue] = useState<string>('');
   const [scanResult, setScanResult] = useState<{
     jsonText: string;
     count: number;
@@ -317,7 +318,8 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
             date: scanDateMode === 'date' ? scanDateValue : undefined,
             month: scanDateMode === 'month' ? scanMonthValue : undefined,
             tzOffsetMinutes: new Date().getTimezoneOffset()
-          }
+          },
+          speed: scanSpeedValue ? Number(scanSpeedValue) : undefined
         })
       });
 
@@ -808,6 +810,19 @@ export default function RobloxPermissionManager({ robloxConfig, setRobloxConfig 
                 </button>
               </div>
             )}
+
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/[0.06]">
+              <label className="text-[11px] text-neutral-400">Speed (Opsional):</label>
+              <select
+                value={scanSpeedValue}
+                onChange={(e) => setScanSpeedValue(e.target.value)}
+                className="music-input rounded-xl px-3 py-1 text-xs text-neutral-200"
+              >
+                <option value="" className="bg-[#181922]">Normal (tanpa speed)</option>
+                <option value="0.8" className="bg-[#181922]">Bypass 25% (speed = 0.8)</option>
+                <option value="0.667" className="bg-[#181922]">Bypass 50% (speed = 0.667)</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2.5">
